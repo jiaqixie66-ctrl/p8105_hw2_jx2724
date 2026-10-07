@@ -175,11 +175,110 @@ gwynnda_trash |>
 The combined Trash Wheel dataset contains `r nrow(trash_wheel_df)` observations. Key variables include dumpster number, date, weight in tons, volume in cubic yards, counts of several types of trash, homes powered, and an indicator for which Trash Wheel collected the material. Professor Trash Wheel collected a total of 282.26 tons of trash. Gwynnda collected 18,120 cigarette butts in June 2022.
 
 
+## Problem 3
+
+```{r}
+mci_baseline =
+  read_csv(
+    "data/MCI_baseline.csv",
+    skip = 1
+  ) |>
+  janitor::clean_names()
+```
+```{r}
+mci_baseline =
+  mci_baseline |>
+  mutate(
+    sex = factor(
+      sex,
+      levels = c(0, 1),
+      labels = c("female", "male")
+    ),
+    apoe4 = factor(
+      apoe4,
+      levels = c(0, 1),
+      labels = c("non-carrier", "carrier")
+    ),
+    age_at_onset = na_if(age_at_onset, "."),
+    age_at_onset = as.numeric(age_at_onset)
+  ) |>
+  filter(
+    is.na(age_at_onset) | age_at_onset > current_age
+  )
+```
+
+After importing the baseline demographic data, I cleaned the variable names, recoded sex and APOE4 carrier status as categorical variables, converted MCI onset age to numeric, and removed participants who already had MCI at baseline. The cleaned baseline dataset contains 479 participants, of whom 93 developed MCI during follow-up. The average baseline age is approximately 65.03 years. Among women in the study, 30% are APOE4 carriers.
+
+```{r}
+mci_amyloid =
+  read_csv(
+    "data/mci_amyloid.csv",
+    skip = 1
+  ) |>
+  janitor::clean_names()
+```
+
+```{r}
+mci_amyloid =
+  mci_amyloid |>
+  mutate(
+    across(baseline:time_8, as.numeric)
+  ) |>
+  pivot_longer(
+    baseline:time_8,
+    names_to = "visit",
+    values_to = "amyloid"
+  ) |>
+  mutate(
+    time = case_match(
+      visit,
+      "baseline" ~ 0,
+      "time_2" ~ 2,
+      "time_4" ~ 4,
+      "time_6" ~ 6,
+      "time_8" ~ 8
+    )
+  ) |>
+  select(study_id, time, amyloid)
+```
+
+```{r}
+baseline_only =
+  mci_baseline |>
+  distinct(id) |>
+  anti_join(
+    mci_amyloid |>
+      distinct(study_id),
+    by = c("id" = "study_id")
+  )
+
+amyloid_only =
+  mci_amyloid |>
+  distinct(study_id) |>
+  anti_join(
+    mci_baseline |>
+      distinct(id),
+    by = c("study_id" = "id")
+  )
+```
+
+There are 8 participants who appear only in the baseline dataset and 16 participants who appear only in the amyloid dataset. Therefore, 471 participants are present in both datasets.
 
 
+```{r}
+mci_combined =
+  mci_baseline |>
+  inner_join(
+    mci_amyloid,
+    by = c("id" = "study_id")
+  )
+```
 
+```{r}
+write_csv(
+  mci_combined,
+  "data/mci_combined.csv"
+)
+```
 
-
-
-
-
+The amyloid dataset was imported, cleaned, and reshaped to long format so that each row represents one participant at one study time point. There are 8 participants who appear only in the baseline dataset and 16 participants who appear only in the amyloid dataset, leaving 471 participants present in both datasets. After combining the demographic and amyloid data using an inner join, the resulting dataset contains 2355 observations and 8 variables. The combined dataset was exported as `mci_combined.csv` in the `data` directory.
